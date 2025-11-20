@@ -7,9 +7,12 @@ A Python script that replicates forum topic structures between Telegram groups a
 - Automatically discovers and replicates all forum topics from source to destination group
 - Preserves topic titles and emoji icons
 - Forwards messages chronologically while maintaining topic organization
-- Supports resumable operation with progress tracking
+- Supports resumable operation with progress tracking (saves message ID and topic ID)
 - Allows selective topic skipping (creates topics but doesn't forward content)
 - Implements rate limiting to comply with Telegram API restrictions
+- Robust error handling with detailed logging for troubleshooting
+- Filters out non-topic messages during discovery to avoid false positives
+- Validates topic creation actions to ensure only genuine forum topics are processed
 
 ## Requirements
 
@@ -49,24 +52,33 @@ python bot.py
 ```
 
 On first run, you'll be prompted to authenticate with your Telegram account. The script will:
-1. Connect to both source and destination groups
-2. Scan and map all forum topics
-3. Create missing topics in the destination group
-4. Forward messages from source to destination, organized by topic
-5. Track progress in `last_forwarded_id.txt` for resumability
+1. Load configuration from `.env` file
+2. Connect to both source and destination groups
+3. Scan source group messages to discover all forum topics (validates topic actions)
+4. Map existing topics between source and destination by title
+5. Create missing topics in the destination group with preserved icons
+6. Forward messages from source to destination, organized by topic
+7. Track progress in `last_forwarded_id.txt` (format: `message_id:topic_id`) for resumability
 
 ## How It Works
 
-1. **Topic Discovery**: Scans the source group messages to discover all forum topics
-2. **Topic Mapping**: Maps source topics to destination topics by title
-3. **Topic Creation**: Creates any missing topics in the destination group with preserved icons
-4. **Message Forwarding**: Forwards messages chronologically, organized by topic
-5. **Progress Tracking**: Saves the last processed message ID to allow resuming after interruptions
-6. **Rate Limiting**: Implements a 250ms delay between messages to avoid API restrictions
+1. **Environment Loading**: Reads configuration from `.env` file with validation
+2. **Topic Discovery**: Scans up to 1000 recent messages to identify forum topics by their action metadata
+3. **Topic Validation**: Filters out non-topic messages and validates that discovered topics have proper forum topic actions
+4. **Topic Mapping**: Maps source topics to destination topics by title, preserving the General topic (ID 1)
+5. **Topic Creation**: Creates any missing topics in the destination group with preserved emoji icons
+6. **Message Forwarding**: Forwards messages chronologically, organized by topic, skipping topic creation messages
+7. **Progress Tracking**: Saves both message ID and topic ID to `last_forwarded_id.txt` for accurate resumption
+8. **Rate Limiting**: Implements a 250ms delay between messages to avoid API restrictions
+9. **Error Handling**: Comprehensive error handling with detailed logging for debugging
 
 ## Notes
 
-- Topics listed in `SKIP_TOPIC_ID` will be created in the destination but their content won't be forwarded
-- The script can be safely interrupted and will resume from where it left off
+- Topics listed in `SKIP_TOPIC_ID` will be created in the destination but their content won't be forwarded (progress is still tracked)
+- The script can be safely interrupted and will resume from where it left off (both message ID and topic ID are saved)
 - Requires membership in both source and destination groups
 - The General topic (ID 1) is always included and mapped
+- Topic discovery scans the most recent 1000 messages; for groups with many old topics, increase the limit in `fetch_all_topics()`
+- Only messages with actual content (text or media) are forwarded; empty messages and topic creation actions are skipped
+- The script validates that discovered topics are genuine forum topics by checking for action metadata
+- Detailed console logging helps track progress and troubleshoot issues
