@@ -307,7 +307,7 @@ async def topic_migration_forwarder():
             except Exception as e:
                 print(f"         ! ERROR forwarding Message ID {message.id}: {e}. Saving progress and continuing...")
                 save_last_id(last_forwarded_id, source_topic_id)
-                break
+                continue
 
     print("\n--- Forwarding Complete ---")
     print(f"Final Last Forwarded ID saved: {last_forwarded_id} in Topic {last_forwarded_topic}")
