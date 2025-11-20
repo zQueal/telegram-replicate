@@ -104,30 +104,28 @@ async def fetch_all_topics(client, entity):
                         topic_msg = await client.get_messages(entity, ids=topic_id)
                         icon_emoji_id = None
 
-                        if topic_msg and not topic_msg.action:
-                            title = topic_msg.message[:100] if topic_msg.message else f'Topic {topic_id}'
-                        else:
-                            if hasattr(topic_msg, 'action') and hasattr(topic_msg.action, 'title'):
+                        # Only process actual forum topics (those with actions)
+                        if topic_msg and hasattr(topic_msg, 'action') and topic_msg.action:
+                            if hasattr(topic_msg.action, 'title'):
                                 title = topic_msg.action.title
                                 if hasattr(topic_msg.action, 'icon_emoji_id'):
                                     icon_emoji_id = topic_msg.action.icon_emoji_id
                             else:
-                                title = f'Topic {topic_id}'
+                                # Skip if it's an action but not a topic creation action
+                                continue
 
-                        topics[topic_id] = {
-                            'id': topic_id,
-                            'title': title,
-                            'icon_emoji_id': icon_emoji_id
-                        }
-                        icon_info = f" (Icon: {icon_emoji_id})" if icon_emoji_id else ""
-                        print(f"   Found topic {topic_id}: {title}{icon_info}")
+                            topics[topic_id] = {
+                                'id': topic_id,
+                                'title': title,
+                                'icon_emoji_id': icon_emoji_id
+                            }
+                            icon_info = f" (Icon: {icon_emoji_id})" if icon_emoji_id else " (Icon: None)"
+                            print(f"   Found topic {topic_id}: {title}{icon_info}")
+                        else:
+                            # Not a topic, just a regular message being replied to
+                            continue
                     except Exception as e:
-                        print(f"   Could not fetch details for topic {topic_id}: {e}")
-                        topics[topic_id] = {
-                            'id': topic_id,
-                            'title': f'Topic {topic_id}',
-                            'icon_emoji_id': None
-                        }
+                        print(f"   Could not fetch details for topic {topic_id}: {e} (Skipping)")
 
         print(f"   Scanned {message_count} messages, found {len(topics)} topics")
 
@@ -144,6 +142,7 @@ async def ensure_destination_topics(client, source_entity, dest_entity):
     print("--- 1. Ensuring Destination Topics Exist and Building Map (ALL Topics) ---")
 
     all_source_topics = await fetch_all_topics(client, source_entity)
+    # Filter out only topic 1 (General), but include SKIP_TOPIC_IDS for creation
     mappable_source_topics = [t for t in all_source_topics if t['id'] != 1]
     source_topics_by_title = {t['title']: t['id'] for t in mappable_source_topics}
 
@@ -260,12 +259,17 @@ async def topic_migration_forwarder():
 
         topic_min_id = last_forwarded_id if source_topic_id == last_forwarded_topic else 0
 
-        messages = await client.get_messages(
-            entity=source_entity,
-            min_id=topic_min_id,
-            reply_to=source_topic_id,
-            limit=5000
-        )
+        try:
+            messages = await client.get_messages(
+                entity=source_entity,
+                min_id=topic_min_id,
+                reply_to=source_topic_id,
+                limit=5000
+            )
+        except Exception as e:
+            print(f"      ERROR: Failed to fetch messages for topic {source_topic_id}: {e}")
+            print(f"      This topic ID may be invalid or not a proper forum topic. Skipping.")
+            continue
 
         messages.reverse()
 
