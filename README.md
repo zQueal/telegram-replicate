@@ -82,3 +82,29 @@ On first run, you'll be prompted to authenticate with your Telegram account. The
 - Only messages with actual content (text or media) are forwarded; empty messages and topic creation actions are skipped
 - The script validates that discovered topics are genuine forum topics by checking for action metadata
 - Detailed console logging helps track progress and troubleshoot issues
+- **Error Handling**: When a message fails to forward (e.g., protected content), the script logs the error, saves progress, and continues with the next message rather than stopping entirely
+
+## Troubleshooting
+
+### Protected Content Errors
+
+If you encounter errors like:
+```
+! ERROR forwarding Message ID 535: You can't forward messages from a protected chat
+```
+
+**Cause**: The source group has content protection enabled, preventing message forwarding.
+
+**Solution**:
+1. Disable content protection in the source group settings (Group Settings → Chat History → Content Protection)
+2. To retry failed messages, edit `last_forwarded_id.txt` and set the message ID to just before the first failure
+3. Or delete `last_forwarded_id.txt` to restart from the beginning
+4. Run the script again
+
+### Resuming After Errors
+
+The script saves progress after each successful message in `last_forwarded_id.txt` (format: `message_id:topic_id`). If messages were skipped due to errors:
+
+1. Check the console output to identify which message IDs failed
+2. Edit `last_forwarded_id.txt` to set the ID to just before the failed messages
+3. Rerun the script to retry from that point
