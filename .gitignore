@@ -1,4 +1,5 @@
 .env
 *.txt
+*.session
 .claude/
 __pycache__/
