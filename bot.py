@@ -302,7 +302,7 @@ async def topic_migration_forwarder():
                 last_forwarded_topic = source_topic_id
                 save_last_id(last_forwarded_id, last_forwarded_topic)
 
-                await asyncio.sleep(0.25)
+                await asyncio.sleep(0.5)
 
             except Exception as e:
                 print(f"         ! ERROR forwarding Message ID {message.id}: {e}. Saving progress and continuing...")
