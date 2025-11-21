@@ -2,6 +2,7 @@ import asyncio
 import os
 import random
 from telethon import TelegramClient
+from telethon.errors import FloodWaitError
 from telethon.tl.types import Channel, InputChannel, ForumTopic, InputPeerChannel
 from telethon.tl.functions.messages import CreateForumTopicRequest, GetForumTopicsRequest
 
@@ -291,27 +292,44 @@ async def topic_migration_forwarder():
 
             print(f"      Forwarding Message ID {message.id} (Topic {source_topic_id})...")
 
-            try:
-                await client.send_message(
-                    entity=dest_entity,
-                    message=message,
-                    reply_to=dest_topic_id
-                )
+            # Retry mechanism for rate limiting
+            max_retries = 5
+            retry_count = 0
+            message_sent = False
 
-                last_forwarded_id = message.id
-                last_forwarded_topic = source_topic_id
-                save_last_id(last_forwarded_id, last_forwarded_topic)
+            while retry_count < max_retries and not message_sent:
+                try:
+                    await client.send_message(
+                        entity=dest_entity,
+                        message=message,
+                        reply_to=dest_topic_id
+                    )
 
-                await asyncio.sleep(0.5)
+                    last_forwarded_id = message.id
+                    last_forwarded_topic = source_topic_id
+                    save_last_id(last_forwarded_id, last_forwarded_topic)
+                    message_sent = True
 
-            except Exception as e:
-                print(f"         ! ERROR forwarding Message ID {message.id}: {e}. Saving progress and continuing...")
+                    await asyncio.sleep(0.5)
+
+                except FloodWaitError as e:
+                    wait_time = e.seconds
+                    retry_count += 1
+                    print(f"         ! Rate limit hit. Waiting {wait_time} seconds (attempt {retry_count}/{max_retries})...")
+                    await asyncio.sleep(wait_time)
+
+                except Exception as e:
+                    print(f"         ! ERROR forwarding Message ID {message.id}: {e}. Saving progress and continuing...")
+                    save_last_id(last_forwarded_id, source_topic_id)
+                    break
+
+            if not message_sent and retry_count >= max_retries:
+                print(f"         ! Failed to send Message ID {message.id} after {max_retries} retries. Skipping...")
                 save_last_id(last_forwarded_id, source_topic_id)
-                continue
 
     print("\n--- Forwarding Complete ---")
     print(f"Final Last Forwarded ID saved: {last_forwarded_id} in Topic {last_forwarded_topic}")
-    await client.log_out()
+    await client.disconnect()
 
 
 if __name__ == '__main__':
